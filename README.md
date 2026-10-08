@@ -1,12 +1,45 @@
 # PTIT AI Challenge 77
 
-Baseline dịch máy Trung → Việt: PyTorch GRU Seq2Seq, SentencePiece BPE và đánh giá validation bằng SacreBLEU. Đối chiếu metric và định dạng submission với quy định chính thức trước khi nộp.
+Hai notebook dịch máy Trung → Việt: baseline GRU gốc và notebook fine-tune Marian pretrained riêng. Đối chiếu metric và định dạng submission với quy định chính thức trước khi nộp.
+
+## Fine-tune pretrained trên Colab
+
+Mở [`finetune_colab.ipynb`](finetune_colab.ipynb) bằng Colab, hoặc dùng [Open in Colab](https://colab.research.google.com/github/22imer/AIChallenge77/blob/main/finetune_colab.ipynb) sau khi notebook được đưa lên GitHub. File mới ở local chưa tự xuất hiện trên GitHub.
+
+1. Chọn runtime GPU. Đặt ZIP tại `MyDrive/AIChallenge77/datasets/dataset.zip`.
+2. Sửa `ROOT` nếu dùng đường dẫn Drive khác; giữ một `RUN_NAME` cho một cấu hình/dataset.
+3. Run All. Notebook mount Drive, staging dữ liệu về `/content`, fine-tune và xuất bài nộp.
+
+Checkpoint là [`Helsinki-NLP/opus-mt-zh-vi`](https://huggingface.co/Helsinki-NLP/opus-mt-zh-vi), chuyên dịch Trung–Việt, Apache-2.0; revision được cố định trong notebook. Chỉ dùng dữ liệu cuộc thi để fine-tune; không bổ sung corpus ngoài. Giữ nguyên `baseline.ipynb`.
+
+- Validation cố định theo nhóm câu nguồn, loại cặp trùng trước khi chia; chấm với reference nguyên văn. SacreBLEU `tokenize="none"` chấm token phân cách bằng khoảng trắng, không detokenize; đây là metric nội bộ, chưa xác nhận chuẩn chấm chính thức.
+- Pilot đo bộ nhớ/tốc độ trên GPU thực tế để chọn batch size. Training mỗi lần tối đa **3 giờ theo giới hạn mềm**, dành 10 phút cuối để lưu/dừng. Thao tác GPU/Drive đang chạy có thể vượt mốc này; download, đánh giá pretrained ban đầu, đánh giá cuối và inference nằm ngoài ngân sách training.
+- Lưu weights, tokenizer, optimizer, AMP scaler và RNG lên Drive mỗi khoảng 10 phút và ở ranh giới epoch. Phiên bị ngắt có thể mất công việc từ lần lưu gần nhất; Run All lại với cấu hình cũ để resume. Không chạy đồng thời hai phiên cùng `RUN_NAME`.
+- `checkpoint-index.json` cập nhật nguyên tử cả lựa chọn `latest` để tiếp tục training và `best` theo validation BLEU, kể cả pretrained ban đầu nếu fine-tune chưa cải thiện. Chỉ snapshot đã có marker hoàn tất được chọn.
+- Dành khoảng **4–5 GiB Drive trống** cho checkpoint. Đổi cấu hình hoặc dữ liệu thì đổi `RUN_NAME`; không trộn checkpoint/tokenizer cũ.
+- Run mặc định cho metric mới là `marian-zh-vi-none-v1`; cấu hình checkpoint ghi `bleu_tokenize: none`. Checkpoint `13a` cũ được giữ nguyên, không tự resume hoặc so `best_bleu` cũ với điểm `none`. Run mới bắt đầu từ pretrained.
+- `metrics.json` và checkpoints: `MyDrive/AIChallenge77/checkpoints/<RUN_NAME>/`.
+- CSV/ZIP: `MyDrive/AIChallenge77/submissions/<RUN_NAME>/public_submission.*`. Đổi `TEST_SPLIT` sang `private_test` để tạo `private_submission.*`.
+
+Input/target training giới hạn 256 token; notebook báo tỷ lệ bị cắt. Validation references không bị cắt, nhưng input inference/output generation vẫn có giới hạn. BLEU của baseline gốc dùng split/reference khác, **không so trực tiếp** với BLEU notebook mới.
+
+Kiểm tra hồi quy dữ liệu ở local, không cần GPU:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Kiểm chứng local: 7 kiểm tra hồi quy dữ liệu/checkpoint; smoke CPU dùng checkpoint pretrained thật (77.943.296 tham số), 4 cặp train và 2 cặp validation. Đã chạy optimizer, save/reload/resume (toàn bộ weights khớp chạy liền), nhánh hết ngân sách, full-reference evaluation và xuất CSV/ZIP từ checkpoint được chọn. Không dùng BLEU của smoke nhỏ này để kết luận chất lượng.
+
+Chưa chạy trên GPU Colab hoặc mount Google Drive thực tế; pilot CUDA, thời gian train 3 giờ và BLEU trên toàn bộ validation cần đo trong phiên Colab. Tokenizer audit trên ZIP hiện tại: source train dài nhất 72 token, target train 89 token, public/private source 50 token; không câu nào vượt giới hạn 256.
+
+## Baseline GRU gốc
 
 ## Mở notebook trên Colab
 
 [Open in Colab](https://colab.research.google.com/github/22imer/AIChallenge77/blob/main/baseline.ipynb)
 
-Chọn GPU trong cài đặt runtime. Notebook hiện là baseline gốc, **chưa phải runner `.py`**: chưa tự mount Drive hoặc restore dataset. Không Run All trước khi chuẩn bị dữ liệu và chỉnh đường dẫn như dưới đây.
+Chọn GPU trong cài đặt runtime. Notebook baseline có cell mount Drive với đường dẫn dataset cũ; cập nhật đường dẫn trước khi chạy. Đây **chưa phải runner `.py`**. Phần dưới hướng dẫn chuẩn bị dữ liệu cho baseline, không cần thêm các cell này vào notebook fine-tune mới.
 
 ## Chuẩn bị dữ liệu
 
@@ -85,4 +118,4 @@ git push
 
 Xóa output notebook trước khi commit để tránh public các câu dữ liệu và prediction nằm trong output. `.gitignore` chỉ chặn file ngoài notebook, không chặn nội dung được nhúng trong notebook.
 
-Hiện repo chứa baseline notebook; chưa có `src/train.py`, `src/inference.py` hoặc `notebooks/colab_runner.ipynb`. Vì vậy command `python -m src.train` chưa dùng được.
+Repo chứa hai notebook; chưa có `src/train.py`, `src/inference.py` hoặc `notebooks/colab_runner.ipynb`. Vì vậy command `python -m src.train` chưa dùng được.
