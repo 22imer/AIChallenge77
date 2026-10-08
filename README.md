@@ -8,18 +8,18 @@ Mở [`finetune_colab.ipynb`](finetune_colab.ipynb) bằng Colab, hoặc dùng [
 
 1. Chọn runtime GPU. Đặt ZIP tại `MyDrive/AIChallenge77/datasets/dataset.zip`.
 2. Sửa `ROOT` nếu dùng đường dẫn Drive khác; giữ một `RUN_NAME` cho một cấu hình/dataset.
-3. Run All. Notebook mount Drive, staging dữ liệu về `/content`, fine-tune và xuất bài nộp.
+3. Cell `%pip install` đang được comment theo bản Colab. Với runtime mới chưa có dependency, bỏ dấu `#` và chạy cell đó trước; sau đó Run All để mount Drive, staging dữ liệu về `/content`, fine-tune và xuất bài nộp.
 
 Checkpoint là [`Helsinki-NLP/opus-mt-zh-vi`](https://huggingface.co/Helsinki-NLP/opus-mt-zh-vi), chuyên dịch Trung–Việt, Apache-2.0; revision được cố định trong notebook. Chỉ dùng dữ liệu cuộc thi để fine-tune; không bổ sung corpus ngoài. Giữ nguyên `baseline.ipynb`.
 
 - Validation cố định theo nhóm câu nguồn, loại cặp trùng trước khi chia; chấm với reference nguyên văn. SacreBLEU `tokenize="none"` chấm token phân cách bằng khoảng trắng, không detokenize; đây là metric nội bộ, chưa xác nhận chuẩn chấm chính thức.
-- Pilot đo bộ nhớ/tốc độ trên GPU thực tế để chọn batch size. Training mỗi lần tối đa **3 giờ theo giới hạn mềm**, dành 10 phút cuối để lưu/dừng. Thao tác GPU/Drive đang chạy có thể vượt mốc này; download, đánh giá pretrained ban đầu, đánh giá cuối và inference nằm ngoài ngân sách training.
+- Pilot thử batch size từ 128 xuống 1, đo bộ nhớ/tốc độ trên GPU thực tế và chọn mức đầu tiên dưới 80% VRAM. Training mỗi lần tối đa **3 giờ theo giới hạn mềm**, dành 10 phút cuối để lưu/dừng. Thao tác GPU/Drive đang chạy có thể vượt mốc này; download, đánh giá pretrained ban đầu, đánh giá cuối và inference nằm ngoài ngân sách training.
 - Lưu weights, tokenizer, optimizer, AMP scaler và RNG lên Drive mỗi khoảng 10 phút và ở ranh giới epoch. Phiên bị ngắt có thể mất công việc từ lần lưu gần nhất; Run All lại với cấu hình cũ để resume. Không chạy đồng thời hai phiên cùng `RUN_NAME`.
 - `checkpoint-index.json` cập nhật nguyên tử cả lựa chọn `latest` để tiếp tục training và `best` theo validation BLEU, kể cả pretrained ban đầu nếu fine-tune chưa cải thiện. Chỉ snapshot đã có marker hoàn tất được chọn.
 - Dành khoảng **4–5 GiB Drive trống** cho checkpoint. Đổi cấu hình hoặc dữ liệu thì đổi `RUN_NAME`; không trộn checkpoint/tokenizer cũ.
 - Run mặc định cho metric mới là `marian-zh-vi-none-v1`; cấu hình checkpoint ghi `bleu_tokenize: none`. Checkpoint `13a` cũ được giữ nguyên, không tự resume hoặc so `best_bleu` cũ với điểm `none`. Run mới bắt đầu từ pretrained.
 - `metrics.json` và checkpoints: `MyDrive/AIChallenge77/checkpoints/<RUN_NAME>/`.
-- CSV/ZIP: `MyDrive/AIChallenge77/submissions/<RUN_NAME>/public_submission.*`. Đổi `TEST_SPLIT` sang `private_test` để tạo `private_submission.*`.
+- CSV/ZIP: `MyDrive/AIChallenge77/submissions/<RUN_NAME>/nlp_submission.csv` và `nlp_submission.zip`. Đổi `TEST_SPLIT` sang `private_test` để dịch private; tên bài nộp vẫn là `nlp_submission.*`.
 
 Input/target training giới hạn 256 token; notebook báo tỷ lệ bị cắt. Validation references không bị cắt, nhưng input inference/output generation vẫn có giới hạn. BLEU của baseline gốc dùng split/reference khác, **không so trực tiếp** với BLEU notebook mới.
 
